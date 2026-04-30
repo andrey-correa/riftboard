@@ -1,0 +1,55 @@
+// Prisma schema for the LoL stats platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id          String    @id @default(uuid())
+  puuid       String    @unique
+  gameName    String
+  tagLine     String
+  region      String
+  summonerId  String?
+  profileIcon Int?
+  level       Int?
+  lastUpdated DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ranks PlayerRank[]
+
+  @@unique([region, gameName, tagLine])
+  @@index([region, gameName, tagLine])
+}
+
+model PlayerRank {
+  id           String  @id @default(uuid())
+  playerId     String
+  queueType    String
+  tier         String?
+  rank         String?
+  leaguePoints Int?
+  wins         Int?
+  losses       Int?
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, queueType])
+  @@index([playerId])
+}
+
+model Match {
+  id          String  @id
+  regionRoute String
+  duration    Int?
+  rawData     Json
+  createdAt   DateTime @default(now())
+
+  @@index([regionRoute])
+}
