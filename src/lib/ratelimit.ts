@@ -18,10 +18,17 @@ export async function rateLimit(ip: string): Promise<RateLimitResult> {
   if (!redis) return { allowed: true, remaining: LIMIT, retryAfter: 0 };
   const key = KEYS.rateLimit(ip);
   try {
-    const count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, WINDOW);
-    }
+    // Lua garante atomicidade: INCR + EXPIRE numa única operação.
+    // Se apenas INCR fosse executado e o processo morresse antes do EXPIRE,
+    // a key ficaria sem TTL e bloquearia o IP permanentemente.
+    const count = (await redis.eval(
+      `local c = redis.call('INCR', KEYS[1])
+if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return c`,
+      1,
+      key,
+      String(WINDOW),
+    )) as number;
     if (count > LIMIT) {
       const ttl = await redis.ttl(key);
       logger.warn('rate limit hit', { ip, count });

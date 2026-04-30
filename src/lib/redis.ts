@@ -116,13 +116,15 @@ export async function acquireLock(
   key: string,
   ttlSeconds: number,
 ): Promise<boolean> {
-  if (!redis) return true;
+  // Fail closed: se Redis não está disponível, nega o lock para evitar
+  // abuso da Riot API quando o sistema de controle de cooldown está inoperante.
+  if (!redis) return false;
   try {
     const result = await redis.set(key, '1', 'EX', ttlSeconds, 'NX');
     return result === 'OK';
   } catch (err) {
     logger.error('acquireLock error', { key, err: (err as Error).message });
-    return true;
+    return false;
   }
 }
 

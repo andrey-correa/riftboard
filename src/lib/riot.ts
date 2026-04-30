@@ -63,6 +63,7 @@ async function riotRequest<T>(opts: RequestOptions): Promise<T> {
         },
         // Disable Next.js fetch caching - we manage cache ourselves via Redis
         cache: 'no-store',
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (err) {
       logger.warn('riot fetch network error', {

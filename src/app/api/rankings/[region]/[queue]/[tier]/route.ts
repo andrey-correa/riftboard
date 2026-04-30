@@ -8,7 +8,6 @@ export const dynamic = 'force-dynamic';
 const VALID_QUEUES = new Set([
   'RANKED_SOLO_5x5',
   'RANKED_FLEX_SR',
-  'RANKED_FLEX_TT',
 ]);
 
 const VALID_TIERS = new Set<ApexTierUpper>([
@@ -29,7 +28,7 @@ export async function GET(
     if (!VALID_QUEUES.has(params.queue)) {
       return jsonError(
         'INVALID_QUEUE',
-        'queue must be one of RANKED_SOLO_5x5, RANKED_FLEX_SR, RANKED_FLEX_TT.',
+        'queue must be one of RANKED_SOLO_5x5, RANKED_FLEX_SR.',
         400,
       );
     }

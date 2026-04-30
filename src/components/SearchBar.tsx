@@ -7,6 +7,7 @@ import {
   REGION_LABELS,
   type PlatformRegion,
 } from '@/lib/regions';
+import { parseDisplayName } from '@/lib/player-url';
 
 interface SearchBarProps {
   compact?: boolean;
@@ -35,18 +36,14 @@ export function SearchBar({
     setError(null);
 
     const trimmed = riotId.trim();
-    if (!trimmed.includes('#')) {
-      setError('Use format Name#TAG');
-      return;
-    }
-    const [name, tag] = trimmed.split('#');
-    if (!name || !tag) {
+    const { gameName, tagLine } = parseDisplayName(trimmed);
+    if (!gameName || !tagLine) {
       setError('Use format Name#TAG');
       return;
     }
     router.push(
-      `/player/${region}/${encodeURIComponent(name)}/${encodeURIComponent(
-        tag,
+      `/player/${region}/${encodeURIComponent(gameName)}/${encodeURIComponent(
+        tagLine,
       )}`,
     );
   }
