@@ -6,6 +6,13 @@ import type {
   MatchDetail,
   ChampionsResponse,
   LeaderboardResponse,
+  ChampionOverviewDto,
+  ChampionBuildDto,
+  ChampionRuneDto,
+  ChampionSpellDto,
+  ChampionMatchupDto,
+  ChampionTierListDto,
+  InsufficientDataDto,
 } from '@/types/domain';
 
 export interface ApiError {
@@ -92,4 +99,99 @@ export async function fetchRankings(
     cache: 'no-store',
   });
   return handle(res);
+}
+
+// ---------------------------------------------------------------------------
+// Champion analytics
+// ---------------------------------------------------------------------------
+
+export interface ChampionQueryParams {
+  region?: string;
+  role?: string;
+  queueId?: number;
+  patch?: string;
+}
+
+function buildChampionQs(params: ChampionQueryParams): string {
+  const sp = new URLSearchParams();
+  if (params.region) sp.set('region', params.region);
+  if (params.role) sp.set('role', params.role);
+  if (params.queueId) sp.set('queueId', String(params.queueId));
+  if (params.patch) sp.set('patch', params.patch);
+  const qs = sp.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function fetchChampionOverview(
+  championId: number | string,
+  params: ChampionQueryParams = {},
+): Promise<ChampionOverviewDto | InsufficientDataDto> {
+  const res = await fetch(
+    `/api/champions/${championId}/overview${buildChampionQs(params)}`,
+    { cache: 'no-store' },
+  );
+  return handle<ChampionOverviewDto | InsufficientDataDto>(res);
+}
+
+export async function fetchChampionBuilds(
+  championId: number | string,
+  params: ChampionQueryParams = {},
+): Promise<ChampionBuildDto[] | InsufficientDataDto> {
+  const res = await fetch(
+    `/api/champions/${championId}/builds${buildChampionQs(params)}`,
+    { cache: 'no-store' },
+  );
+  return handle<ChampionBuildDto[] | InsufficientDataDto>(res);
+}
+
+export async function fetchChampionRunes(
+  championId: number | string,
+  params: ChampionQueryParams = {},
+): Promise<ChampionRuneDto[] | InsufficientDataDto> {
+  const res = await fetch(
+    `/api/champions/${championId}/runes${buildChampionQs(params)}`,
+    { cache: 'no-store' },
+  );
+  return handle<ChampionRuneDto[] | InsufficientDataDto>(res);
+}
+
+export async function fetchChampionSpells(
+  championId: number | string,
+  params: ChampionQueryParams = {},
+): Promise<ChampionSpellDto[] | InsufficientDataDto> {
+  const res = await fetch(
+    `/api/champions/${championId}/spells${buildChampionQs(params)}`,
+    { cache: 'no-store' },
+  );
+  return handle<ChampionSpellDto[] | InsufficientDataDto>(res);
+}
+
+export async function fetchChampionMatchups(
+  championId: number | string,
+  params: ChampionQueryParams = {},
+): Promise<ChampionMatchupDto[] | InsufficientDataDto> {
+  const res = await fetch(
+    `/api/champions/${championId}/matchups${buildChampionQs(params)}`,
+    { cache: 'no-store' },
+  );
+  return handle<ChampionMatchupDto[] | InsufficientDataDto>(res);
+}
+
+export async function fetchChampionTierList(params: {
+  region?: string;
+  role?: string;
+  queueId?: number;
+  patch?: string;
+} = {}): Promise<ChampionTierListDto> {
+  const sp = new URLSearchParams();
+  if (params.region) sp.set('region', params.region);
+  if (params.role) sp.set('role', params.role);
+  if (params.queueId) sp.set('queueId', String(params.queueId));
+  if (params.patch) sp.set('patch', params.patch);
+  const qs = sp.toString();
+  const res = await fetch(
+    `/api/champions/tier-list${qs ? `?${qs}` : ''}`,
+    { cache: 'no-store' },
+  );
+  return handle<ChampionTierListDto>(res);
 }

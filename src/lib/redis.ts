@@ -46,6 +46,9 @@ export const TTL = {
   refreshLock: 120, // 120 s
   accountByPuuid: 60 * 60 * 24,
   summonerById: 60 * 60 * 24,
+  // Champion analytics
+  championAnalytics: 30 * 60, // 30 min
+  championTierList: 30 * 60,  // 30 min
 } as const;
 
 export const KEYS = {
@@ -68,6 +71,19 @@ export const KEYS = {
     `account-by-puuid:${regionalRoute}:${puuid}`,
   summonerById: (region: string, summonerId: string) =>
     `summoner-by-id:${region}:${summonerId}`,
+  // Champion analytics — keyed by (patch, region, role, queueId[, championId])
+  championOverview: (patch: string, region: string, role: string, queueId: number, championId: number) =>
+    `champion-overview:${patch}:${region}:${role}:${queueId}:${championId}`,
+  championBuilds: (patch: string, region: string, role: string, queueId: number, championId: number) =>
+    `champion-builds:${patch}:${region}:${role}:${queueId}:${championId}`,
+  championRunes: (patch: string, region: string, role: string, queueId: number, championId: number) =>
+    `champion-runes:${patch}:${region}:${role}:${queueId}:${championId}`,
+  championSpells: (patch: string, region: string, role: string, queueId: number, championId: number) =>
+    `champion-spells:${patch}:${region}:${role}:${queueId}:${championId}`,
+  championMatchups: (patch: string, region: string, role: string, queueId: number, championId: number) =>
+    `champion-matchups:${patch}:${region}:${role}:${queueId}:${championId}`,
+  championTierList: (patch: string, region: string, role: string, queueId: number) =>
+    `champion-tier-list:${patch}:${region}:${role}:${queueId}`,
 } as const;
 
 export async function cacheGet<T>(key: string): Promise<T | null> {

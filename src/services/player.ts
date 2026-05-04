@@ -4,6 +4,7 @@ import {
   RegionalRoute,
   getRegionalRoute,
 } from '@/lib/regions';
+import { persistMatchParticipants } from '@/services/match-participants';
 import {
   cacheGet,
   cacheSet,
@@ -336,11 +337,24 @@ export async function loadMatchSummariesForPuuid(
 
   const limit = pLimit(5);
 
-  const matches = await Promise.all(
+  const matchDetails = await Promise.all(
     matchIds.map((id) => limit(() => loadMatchDetail(route, id))),
   );
 
-  return matches.map((m) => extractSummaryForPuuid(m, puuid));
+  const summaries: MatchSummary[] = [];
+  for (const m of matchDetails) {
+    try {
+      summaries.push(extractSummaryForPuuid(m, puuid));
+    } catch (err) {
+      // Player PUUID may be missing from very old or spectator matches; skip them.
+      logger.warn('skipping match: puuid not found among participants', {
+        matchId: m.matchId,
+        puuid,
+        err: (err as Error).message,
+      });
+    }
+  }
+  return summaries;
 }
 
 /**
@@ -391,6 +405,10 @@ export async function loadMatchDetail(
       err: (err as Error).message,
     });
   }
+
+  // Best-effort: persist participants for champion analytics.
+  // Errors are caught internally and never block the response.
+  void persistMatchParticipants(matchId, raw);
 
   return detail;
 }
