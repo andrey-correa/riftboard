@@ -10,6 +10,22 @@ import {
 import { REGION_LABELS } from '@/lib/regions';
 import type { PlayerProfile, RankInfo } from '@/types/domain';
 
+// ---------------------------------------------------------------------------
+// Rank emblem helpers
+// ---------------------------------------------------------------------------
+
+const APEX_TIERS = new Set(['MASTER', 'GRANDMASTER', 'CHALLENGER']);
+
+function rankEmblemUrl(tier: string | null): string {
+  if (!tier) return '';
+  const t = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
+  return `https://ddragon.leagueoflegends.com/cdn/img/ranked-emblems/Emblem_${t}.png`;
+}
+
+// ---------------------------------------------------------------------------
+// PlayerHeader
+// ---------------------------------------------------------------------------
+
 interface PlayerHeaderProps {
   profile: PlayerProfile;
   ddragonVersion: string;
@@ -25,9 +41,12 @@ export function PlayerHeader({
   refreshing,
   refreshError,
 }: PlayerHeaderProps) {
+  const solo = profile.ranks.find((r) => r.queueType === 'RANKED_SOLO_5x5') ?? null;
+
   return (
     <div className="card p-5 sm:p-6">
       <div className="flex flex-col sm:flex-row gap-5 items-start sm:items-center">
+        {/* Avatar */}
         <div className="relative shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -36,10 +55,12 @@ export function PlayerHeader({
             className="w-24 h-24 rounded-md border-2 border-accent-dim"
             loading="eager"
           />
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-accent-dim text-accent-bright text-xs font-mono font-medium border border-accent">
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-accent-dim text-accent-bright text-xs font-mono font-medium border border-accent whitespace-nowrap">
             {profile.level}
           </div>
         </div>
+
+        {/* Name + meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="font-display text-2xl sm:text-3xl text-accent-bright tracking-wide truncate">
@@ -49,7 +70,8 @@ export function PlayerHeader({
               #{profile.tagLine}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-1.5 text-sm text-text-secondary">
+
+          <div className="flex items-center gap-3 mt-1.5 text-sm text-text-secondary flex-wrap">
             <span className="font-mono px-1.5 py-0.5 rounded bg-bg-elevated text-accent">
               {REGION_LABELS[profile.region]}
             </span>
@@ -58,7 +80,23 @@ export function PlayerHeader({
               Updated {formatRelativeTime(new Date(profile.lastUpdated).getTime())}
             </span>
           </div>
+
+          {/* Inline Solo/Duo rank badge */}
+          {solo?.tier ? (
+            <div className={`flex items-center gap-2 mt-2 text-sm ${tierColorClass(solo.tier)}`}>
+              <span className="font-display font-semibold">
+                {solo.tier} {!APEX_TIERS.has(solo.tier) && solo.rank}
+              </span>
+              <span className="font-mono text-accent-bright">{solo.leaguePoints} LP</span>
+              {solo.hotStreak && (
+                <span title="Hot Streak" className="text-orange-400 text-xs">🔥</span>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-text-muted">Unranked</p>
+          )}
         </div>
+
         <RefreshButton
           onRefresh={onRefresh}
           refreshing={refreshing}
@@ -68,6 +106,10 @@ export function PlayerHeader({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// RefreshButton
+// ---------------------------------------------------------------------------
 
 interface RefreshButtonProps {
   onRefresh: () => Promise<void>;
@@ -114,68 +156,90 @@ export function RefreshButton({
   );
 }
 
+// ---------------------------------------------------------------------------
+// RankCard
+// ---------------------------------------------------------------------------
+
 interface RankCardProps {
   rank: RankInfo | null;
   queueType: 'RANKED_SOLO_5x5' | 'RANKED_FLEX_SR';
 }
 
 export function RankCard({ rank, queueType }: RankCardProps) {
-  if (!rank) {
+  const label = queueShortLabel(queueType);
+
+  if (!rank?.tier) {
     return (
       <div className="card p-5">
-        <h3 className="font-display text-sm text-text-secondary uppercase tracking-wider mb-3">
-          {queueShortLabel(queueType)}
-        </h3>
+        <p className="text-xs font-display text-text-secondary uppercase tracking-wider mb-4">
+          {label}
+        </p>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full border-2 border-border flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full border-2 border-border flex items-center justify-center shrink-0">
             <span className="text-text-muted text-xs">—</span>
           </div>
-          <div>
-            <p className="font-display text-lg text-text-muted">Unranked</p>
-          </div>
+          <p className="font-display text-lg text-text-muted">Unranked</p>
         </div>
       </div>
     );
   }
 
-  const total = rank.wins + rank.losses;
   const tierClass = tierColorClass(rank.tier);
+  const total = rank.wins + rank.losses;
+  const isApex = APEX_TIERS.has(rank.tier);
 
   return (
     <div className="card p-5">
-      <h3 className="font-display text-sm text-text-secondary uppercase tracking-wider mb-3">
-        {queueShortLabel(queueType)}
-      </h3>
+      {/* Queue label */}
+      <p className="text-xs font-display text-text-secondary uppercase tracking-wider mb-4">
+        {label}
+      </p>
+
       <div className="flex items-center gap-4">
-        <div
-          className={`w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center font-display ${tierClass}`}
-          style={{ borderColor: 'currentColor' }}
-        >
-          <span className="text-[10px] uppercase tracking-wider opacity-80">
-            {rank.tier}
-          </span>
-          <span className="text-base font-bold leading-none mt-0.5">
-            {rank.rank}
-          </span>
-        </div>
-        <div className="flex-1">
-          <p className={`font-display text-xl ${tierClass}`}>
-            {rank.tier} {rank.rank}
-          </p>
+        {/* Rank emblem */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={rankEmblemUrl(rank.tier)}
+          alt={rank.tier}
+          className="w-16 h-16 shrink-0 drop-shadow-lg"
+          loading="lazy"
+        />
+
+        <div className="flex-1 min-w-0">
+          {/* Tier + rank */}
+          <div className={`font-display text-xl font-semibold ${tierClass} flex items-center gap-1.5 flex-wrap`}>
+            <span>{rank.tier}</span>
+            {!isApex && <span>{rank.rank}</span>}
+            {rank.hotStreak && (
+              <span title="Hot Streak" className="text-orange-400 text-base">🔥</span>
+            )}
+          </div>
+
+          {/* LP */}
           <p className="text-sm text-text-secondary mt-0.5">
-            <span className="font-mono text-accent-bright">
+            <span className="font-mono text-accent-bright font-semibold">
               {rank.leaguePoints}
             </span>{' '}
             LP
           </p>
-          <div className="text-xs text-text-secondary mt-1">
-            <span className="text-win">{rank.wins}W</span>{' '}
-            <span className="text-loss">{rank.losses}L</span>{' '}
-            <span className="text-text-muted">·</span>{' '}
-            <span className={rank.winRate >= 50 ? 'text-win' : 'text-loss'}>
+
+          {/* W / L / WR */}
+          <div className="text-xs text-text-secondary mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className="text-win font-mono">{rank.wins}W</span>
+            <span className="text-loss font-mono">{rank.losses}L</span>
+            <span className="text-text-muted">·</span>
+            <span className={rank.winRate >= 50 ? 'text-win font-semibold' : 'text-loss'}>
               {rank.winRate}%
-            </span>{' '}
+            </span>
             <span className="text-text-muted">({total} games)</span>
+          </div>
+
+          {/* Win rate bar */}
+          <div className="mt-2 h-1.5 w-full rounded-full bg-bg-elevated overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${rank.winRate >= 55 ? 'bg-win' : rank.winRate >= 50 ? 'bg-accent' : 'bg-loss'}`}
+              style={{ width: `${Math.min(rank.winRate, 100)}%` }}
+            />
           </div>
         </div>
       </div>
