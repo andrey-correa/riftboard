@@ -12,9 +12,15 @@ const LEVELS: Record<Level, number> = {
   error: 40,
 };
 
-const minLevel: Level =
-  (process.env.LOG_LEVEL as Level) ??
-  (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+const VALID_LEVELS = new Set<Level>(['debug', 'info', 'warn', 'error']);
+
+function resolveMinLevel(): Level {
+  const env = process.env.LOG_LEVEL?.toLowerCase() as Level | undefined;
+  if (env && VALID_LEVELS.has(env)) return env;
+  return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
+}
+
+const minLevel: Level = resolveMinLevel();
 
 function emit(level: Level, msg: string, meta?: Record<string, unknown>) {
   if (LEVELS[level] < LEVELS[minLevel]) return;

@@ -133,6 +133,101 @@ export type LeaderboardEntry = {
   hotStreak: boolean;
 };
 
+// ---------------------------------------------------------------------------
+// Champion analytics DTOs
+// ---------------------------------------------------------------------------
+
+export interface InsufficientDataDto {
+  isInsufficientData: true;
+  games: number;
+  minimumRequiredGames: number;
+  message: string;
+}
+
+export interface ChampionOverviewDto {
+  isInsufficientData: false;
+  championId: number;
+  championName: string;
+  patch: string;
+  region: string;
+  role: string;
+  queueId: number;
+  games: number;
+  wins: number;
+  winRate: number;
+  pickRate: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+  avgKda: number;
+  avgCs: number;
+  avgGold: number;
+  avgDamage: number;
+  avgVision: number;
+  tierScore: number | null;
+  tierLabel: string | null;
+}
+
+export interface ChampionBuildDto {
+  itemBuildKey: string;
+  itemIds: number[];
+  games: number;
+  wins: number;
+  winRate: number;
+  pickRate: number;
+  avgKda: number;
+}
+
+export interface ChampionRuneDto {
+  runeKey: string;
+  primaryRuneStyle: number;
+  secondaryRuneStyle: number;
+  keystoneId: number;
+  games: number;
+  wins: number;
+  winRate: number;
+  pickRate: number;
+}
+
+export interface ChampionSpellDto {
+  spellKey: string;
+  summoner1Id: number;
+  summoner2Id: number;
+  games: number;
+  wins: number;
+  winRate: number;
+  pickRate: number;
+}
+
+export interface ChampionMatchupDto {
+  opponentChampionId: number;
+  opponentChampionName: string;
+  games: number;
+  wins: number;
+  winRate: number;
+  difficultyLabel: string;
+}
+
+export interface ChampionTierEntryDto {
+  championId: number;
+  championName: string;
+  role: string;
+  games: number;
+  winRate: number;
+  pickRate: number;
+  avgKda: number;
+  tierScore: number | null;
+  tierLabel: string | null;
+}
+
+export interface ChampionTierListDto {
+  patch: string | null;
+  region: string;
+  role: string;
+  queueId: number;
+  entries: ChampionTierEntryDto[];
+}
+
 export interface LeaderboardResponse {
   region: PlatformRegion;
   queue: string;

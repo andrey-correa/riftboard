@@ -63,14 +63,32 @@ async function riotRequest<T>(opts: RequestOptions): Promise<T> {
         },
         // Disable Next.js fetch caching - we manage cache ourselves via Redis
         cache: 'no-store',
+        signal: AbortSignal.timeout(10_000),
       });
     } catch (err) {
+      // AbortSignal.timeout() throws a DOMException (TimeoutError/AbortError).
+      // Convert to RiotApiError so mapError can handle it as a structured 504.
+      const isTimeout =
+        err instanceof DOMException &&
+        (err.name === 'TimeoutError' || err.name === 'AbortError');
+
       logger.warn('riot fetch network error', {
         attempt,
         endpoint: opts.endpoint,
+        timeout: isTimeout,
         err: (err as Error).message,
       });
-      if (attempt === retries) throw err;
+
+      if (attempt === retries) {
+        if (isTimeout) {
+          throw new RiotApiError(
+            `Riot request timed out after ${MAX_RETRIES + 1} attempts`,
+            504,
+            opts.endpoint,
+          );
+        }
+        throw err;
+      }
       await sleep(BACKOFF_BASE_MS * Math.pow(2, attempt));
       continue;
     }
@@ -280,6 +298,7 @@ export interface RiotMatchDto {
     gameEndTimestamp?: number;
     gameMode: string;
     gameType: string;
+    gameVersion?: string;
     queueId: number;
     mapId: number;
     platformId: string;

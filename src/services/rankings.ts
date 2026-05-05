@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { PlatformRegion, getRegionalRoute } from '@/lib/regions';
 import { cacheGet, cacheSet, KEYS, TTL } from '@/lib/redis';
 import {
@@ -6,6 +7,7 @@ import {
   getSummonerById,
   ApexTier,
 } from '@/lib/riot';
+import { logger } from '@/lib/logger';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/domain';
 
 export type ApexTierUpper = 'CHALLENGER' | 'GRANDMASTER' | 'MASTER';
@@ -54,10 +56,10 @@ async function resolvePuuidFromSummonerId(
 
     return summoner.puuid;
   } catch (err) {
-    console.error('FAILED_SUMMONER_LOOKUP', {
+    logger.error('summoner lookup failed', {
       region,
       summonerId,
-      error: err,
+      err: (err as Error).message,
     });
 
     return null;
@@ -121,10 +123,10 @@ async function resolveAccountName(params: {
 
     return normalized;
   } catch (err) {
-    console.error('FAILED_ACCOUNT_LOOKUP', {
+    logger.error('account lookup failed', {
       regionalRoute: params.regionalRoute,
       puuid,
-      error: err,
+      err: (err as Error).message,
     });
 
     return {
@@ -134,29 +136,6 @@ async function resolveAccountName(params: {
       displayName: 'Summoner desconhecido',
     };
   }
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = [];
-  let currentIndex = 0;
-
-  async function worker() {
-    while (currentIndex < items.length) {
-      const index = currentIndex;
-      currentIndex += 1;
-      results[index] = await mapper(items[index], index);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-  );
-
-  return results;
 }
 
 export async function getLeaderboard(
@@ -173,47 +152,45 @@ export async function getLeaderboard(
 
   const data = await getApexLeague(region, TIER_TO_LOWER[tier], queue);
 
-  console.log('RAW_RIOT_LEADERBOARD_FIRST_ENTRY', data.entries[0]);
-
   const regionalRoute = getRegionalRoute(region);
 
- const sorted = [...data.entries].sort(
-  (a, b) => b.leaguePoints - a.leaguePoints,
-) as RiotLeaderboardEntryWithPossibleIds[];
+  const sorted = (
+    [...data.entries].sort((a, b) => b.leaguePoints - a.leaguePoints)
+  ) as RiotLeaderboardEntryWithPossibleIds[];
 
-// TEMPORÁRIO PARA TESTE: buscar nomes apenas do top 5
-const topEntries = sorted.slice(0, 10);
+  const topEntries = sorted.slice(0, 200);
+  const limit = pLimit(5);
 
-const entries: LeaderboardEntry[] = await mapWithConcurrency(
-  topEntries,
-  2,
-  async (entry, idx) => {
-      const total = entry.wins + entry.losses;
+  const entries: LeaderboardEntry[] = await Promise.all(
+    topEntries.map((entry, idx) =>
+      limit(async () => {
+        const total = entry.wins + entry.losses;
 
-      const account = await resolveAccountName({
-        region,
-        regionalRoute,
-        puuid: entry.puuid ?? null,
-        summonerId: entry.summonerId ?? null,
-      });
+        const account = await resolveAccountName({
+          region,
+          regionalRoute,
+          puuid: entry.puuid ?? null,
+          summonerId: entry.summonerId ?? null,
+        });
 
-      return {
-        rank: idx + 1,
-        region,
-        puuid: account.puuid,
-        summonerId: entry.summonerId ?? null,
-        gameName: account.gameName,
-        tagLine: account.tagLine,
-        displayName: account.displayName,
-        leaguePoints: entry.leaguePoints,
-        wins: entry.wins,
-        losses: entry.losses,
-        winRate: total > 0 ? Math.round((entry.wins / total) * 1000) / 10 : 0,
-        tier: data.tier,
-        rankInTier: entry.rank,
-        hotStreak: entry.hotStreak ?? false,
-      };
-    },
+        return {
+          rank: idx + 1,
+          region,
+          puuid: account.puuid,
+          summonerId: entry.summonerId ?? null,
+          gameName: account.gameName,
+          tagLine: account.tagLine,
+          displayName: account.displayName,
+          leaguePoints: entry.leaguePoints,
+          wins: entry.wins,
+          losses: entry.losses,
+          winRate: total > 0 ? Math.round((entry.wins / total) * 1000) / 10 : 0,
+          tier: data.tier,
+          rankInTier: entry.rank,
+          hotStreak: entry.hotStreak ?? false,
+        };
+      }),
+    ),
   );
 
   const response: LeaderboardResponse = {

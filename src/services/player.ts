@@ -4,6 +4,7 @@ import {
   RegionalRoute,
   getRegionalRoute,
 } from '@/lib/regions';
+import { persistMatchParticipants } from '@/services/match-participants';
 import {
   cacheGet,
   cacheSet,
@@ -16,6 +17,7 @@ import {
 import {
   getAccountByRiotId,
   getSummonerByPuuid,
+  getLeagueEntriesBySummonerId,
   getMatchIdsByPuuid,
   getMatchById,
   RiotNotFoundError,
@@ -52,6 +54,7 @@ interface LoadOptions {
 type CachedSummonerProfile = {
   profileIconId: number;
   summonerLevel: number;
+  summonerId: string;
 };
 
 function buildRanks(
@@ -141,7 +144,8 @@ async function fetchAndPersistProfile(
   if (
     summoner &&
     (typeof summoner.profileIconId !== 'number' ||
-      typeof summoner.summonerLevel !== 'number')
+      typeof summoner.summonerLevel !== 'number' ||
+      typeof summoner.summonerId !== 'string')
   ) {
     logger.warn('invalid summoner cache; deleting and refetching', {
       region,
@@ -173,6 +177,7 @@ async function fetchAndPersistProfile(
       summoner = {
         profileIconId: raw.profileIconId,
         summonerLevel: raw.summonerLevel,
+        summonerId: raw.id,
       };
 
       await cacheSet(summonerKey, summoner, TTL.summoner);
@@ -187,10 +192,9 @@ async function fetchAndPersistProfile(
 
   const profileIconId = summoner.profileIconId;
   const summonerLevel = summoner.summonerLevel;
+  const summonerId: string = summoner.summonerId;
 
-  const summonerId: string | null = null;
-
-  const leagueEntries: Array<{
+  type LeagueEntry = {
     queueType: string;
     tier: string;
     rank: string;
@@ -198,14 +202,39 @@ async function fetchAndPersistProfile(
     wins: number;
     losses: number;
     hotStreak?: boolean;
-  }> = [];
+  };
 
-  logger.warn('skipping league entries lookup because summonerId is unavailable', {
-    region,
-    puuid: account.puuid,
-    gameName: account.gameName,
-    tagLine: account.tagLine,
-  });
+  let leagueEntries: LeagueEntry[] = [];
+  let hasDefinitiveRankData = false;
+
+  const leagueKey = KEYS.leagueEntries(region, summonerId);
+  const cachedLeague = await cacheGet<LeagueEntry[]>(leagueKey);
+
+  if (cachedLeague) {
+    leagueEntries = cachedLeague;
+    hasDefinitiveRankData = true;
+  } else {
+    try {
+      const riotEntries = await getLeagueEntriesBySummonerId(region, summonerId);
+      leagueEntries = riotEntries.map((e) => ({
+        queueType: e.queueType,
+        tier: e.tier,
+        rank: e.rank,
+        leaguePoints: e.leaguePoints,
+        wins: e.wins,
+        losses: e.losses,
+        hotStreak: e.hotStreak,
+      }));
+      await cacheSet(leagueKey, leagueEntries, TTL.league);
+      hasDefinitiveRankData = true;
+    } catch (err) {
+      logger.warn('league entries fetch failed, preserving existing db ranks', {
+        region,
+        summonerId,
+        err: (err as Error).message,
+      });
+    }
+  }
 
   const ranks = buildRanks(leagueEntries);
   const now = new Date();
@@ -234,20 +263,22 @@ async function fetchAndPersistProfile(
       },
     });
 
-    await prisma.playerRank.deleteMany({ where: { playerId: player.id } });
+    if (hasDefinitiveRankData) {
+      await prisma.playerRank.deleteMany({ where: { playerId: player.id } });
 
-    if (ranks.length > 0) {
-      await prisma.playerRank.createMany({
-        data: ranks.map((r) => ({
-          playerId: player.id,
-          queueType: r.queueType,
-          tier: r.tier,
-          rank: r.rank,
-          leaguePoints: r.leaguePoints,
-          wins: r.wins,
-          losses: r.losses,
-        })),
-      });
+      if (ranks.length > 0) {
+        await prisma.playerRank.createMany({
+          data: ranks.map((r) => ({
+            playerId: player.id,
+            queueType: r.queueType,
+            tier: r.tier,
+            rank: r.rank,
+            leaguePoints: r.leaguePoints,
+            wins: r.wins,
+            losses: r.losses,
+          })),
+        });
+      }
     }
   } catch (err) {
     logger.error('db persist failed', {
@@ -306,11 +337,24 @@ export async function loadMatchSummariesForPuuid(
 
   const limit = pLimit(5);
 
-  const matches = await Promise.all(
+  const matchDetails = await Promise.all(
     matchIds.map((id) => limit(() => loadMatchDetail(route, id))),
   );
 
-  return matches.map((m) => extractSummaryForPuuid(m, puuid));
+  const summaries: MatchSummary[] = [];
+  for (const m of matchDetails) {
+    try {
+      summaries.push(extractSummaryForPuuid(m, puuid));
+    } catch (err) {
+      // Player PUUID may be missing from very old or spectator matches; skip them.
+      logger.warn('skipping match: puuid not found among participants', {
+        matchId: m.matchId,
+        puuid,
+        err: (err as Error).message,
+      });
+    }
+  }
+  return summaries;
 }
 
 /**
@@ -361,6 +405,10 @@ export async function loadMatchDetail(
       err: (err as Error).message,
     });
   }
+
+  // Best-effort: persist participants for champion analytics.
+  // Errors are caught internally and never block the response.
+  void persistMatchParticipants(matchId, raw);
 
   return detail;
 }

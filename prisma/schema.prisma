@@ -45,11 +45,190 @@ model PlayerRank {
 }
 
 model Match {
-  id          String  @id
+  id          String   @id
   regionRoute String
   duration    Int?
   rawData     Json
   createdAt   DateTime @default(now())
 
+  participants MatchParticipant[]
+
   @@index([regionRoute])
+}
+
+model MatchParticipant {
+  id                 String   @id @default(uuid())
+  matchId            String
+  puuid              String
+  region             String
+  gameName           String?
+  tagLine            String?
+  championId         Int
+  championName       String
+  teamId             Int
+  win                Boolean
+  kills              Int
+  deaths             Int
+  assists            Int
+  cs                 Int
+  goldEarned         Int
+  damageToChampions  Int
+  damageTaken        Int
+  visionScore        Int
+  role               String?
+  lane               String?
+  queueId            Int
+  gameMode           String
+  gameCreation       BigInt
+  gameDuration       Int
+  patch              String?
+  item0              Int      @default(0)
+  item1              Int      @default(0)
+  item2              Int      @default(0)
+  item3              Int      @default(0)
+  item4              Int      @default(0)
+  item5              Int      @default(0)
+  item6              Int      @default(0)
+  summoner1Id        Int
+  summoner2Id        Int
+  primaryRuneStyle   Int?
+  secondaryRuneStyle Int?
+  keystoneId         Int?
+  rawPerks           Json?
+  createdAt          DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, puuid])
+  @@index([championId])
+  @@index([championName])
+  @@index([region])
+  @@index([patch])
+  @@index([role])
+  @@index([queueId])
+  @@index([puuid])
+  @@index([gameCreation])
+  @@index([patch, region, role, queueId])
+}
+
+// ---------------------------------------------------------------------------
+// Champion analytics — pré-agregações calculadas a partir de MatchParticipant
+// ---------------------------------------------------------------------------
+
+/// Estatísticas gerais por campeão: winRate, pickRate, KDA médio, tier.
+model ChampionAggregate {
+  id           String   @id @default(uuid())
+  championId   Int
+  championName String
+  patch        String
+  region       String
+  role         String
+  queueId      Int
+  games        Int
+  wins         Int
+  winRate      Float
+  pickRate     Float
+  avgKills     Float
+  avgDeaths    Float
+  avgAssists   Float
+  avgKda       Float
+  avgCs        Float
+  avgGold      Float
+  avgDamage    Float
+  avgVision    Float
+  tierScore    Float?
+  tierLabel    String?
+  updatedAt    DateTime @updatedAt
+
+  @@unique([championId, patch, region, role, queueId])
+  @@index([patch, region, role, queueId])
+  @@index([championId])
+}
+
+/// Build mais comum: 3 primeiros itens não-zero em ordem de slot (item0-5).
+model ChampionBuildAggregate {
+  id           String   @id @default(uuid())
+  championId   Int
+  championName String
+  patch        String
+  region       String
+  role         String
+  queueId      Int
+  itemBuildKey String   // ex: "6672-3031-3006"
+  itemIds      Int[]
+  games        Int
+  wins         Int
+  winRate      Float
+  pickRate     Float
+  avgKda       Float
+  updatedAt    DateTime @updatedAt
+
+  @@unique([championId, patch, region, role, queueId, itemBuildKey])
+  @@index([championId, patch, region, role, queueId])
+}
+
+/// Runa mais comum: chave = primaryStyle-secondaryStyle-keystoneId.
+model ChampionRuneAggregate {
+  id                 String   @id @default(uuid())
+  championId         Int
+  championName       String
+  patch              String
+  region             String
+  role               String
+  queueId            Int
+  runeKey            String   // ex: "8100-8300-8128"
+  primaryRuneStyle   Int
+  secondaryRuneStyle Int
+  keystoneId         Int
+  games              Int
+  wins               Int
+  winRate            Float
+  pickRate           Float
+  updatedAt          DateTime @updatedAt
+
+  @@unique([championId, patch, region, role, queueId, runeKey])
+  @@index([championId, patch, region, role, queueId])
+}
+
+/// Feitiço de invocador mais comum: chave = IDs ordenados. Ex: "4-14".
+model ChampionSpellAggregate {
+  id           String   @id @default(uuid())
+  championId   Int
+  championName String
+  patch        String
+  region       String
+  role         String
+  queueId      Int
+  spellKey     String   // ex: "4-14"
+  summoner1Id  Int
+  summoner2Id  Int
+  games        Int
+  wins         Int
+  winRate      Float
+  pickRate     Float
+  updatedAt    DateTime @updatedAt
+
+  @@unique([championId, patch, region, role, queueId, spellKey])
+  @@index([championId, patch, region, role, queueId])
+}
+
+/// Matchup: desempenho do campeão contra oponentes na mesma rota.
+model ChampionMatchupAggregate {
+  id                   String   @id @default(uuid())
+  championId           Int
+  championName         String
+  opponentChampionId   Int
+  opponentChampionName String
+  patch                String
+  region               String
+  role                 String
+  queueId              Int
+  games                Int
+  wins                 Int
+  winRate              Float
+  difficultyLabel      String   // "Easy" | "Even" | "Hard"
+  updatedAt            DateTime @updatedAt
+
+  @@unique([championId, opponentChampionId, patch, region, role, queueId])
+  @@index([championId, patch, region, role, queueId])
 }

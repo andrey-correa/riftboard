@@ -4,6 +4,8 @@ import { DDRAGON_BASE_URL, ddragonChampionSplashUrl } from '@/lib/ddragon';
 import type { ChampionListItem, ChampionsResponse } from '@/types/domain';
 
 const VERSIONS_URL = `${DDRAGON_BASE_URL}/api/versions.json`;
+const DDRAGON_VERSION_KEY = 'champions:ddragon-version';
+const DDRAGON_VERSION_TTL = 60 * 60; // 1 hora — patches saem a cada 2 semanas
 
 interface DDragonChampionEntry {
   id: string;
@@ -29,17 +31,31 @@ interface DDragonChampionsPayload {
 }
 
 async function fetchLatestVersion(): Promise<string> {
-  const res = await fetch(VERSIONS_URL, { cache: 'no-store' });
+  const cached = await cacheGet<string>(DDRAGON_VERSION_KEY);
+  if (cached) return cached;
+
+  const res = await fetch(VERSIONS_URL, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) throw new Error(`DDragon versions fetch failed: ${res.status}`);
   const versions = (await res.json()) as string[];
-  return versions[0];
+  const version = versions[0];
+
+  await cacheSet(DDRAGON_VERSION_KEY, version, DDRAGON_VERSION_TTL);
+  logger.debug('ddragon version cached', { version });
+
+  return version;
 }
 
 async function fetchChampionsFromDDragon(
   version: string,
 ): Promise<ChampionListItem[]> {
   const url = `${DDRAGON_BASE_URL}/cdn/${version}/data/en_US/champion.json`;
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) {
     throw new Error(`DDragon champions fetch failed: ${res.status}`);
   }
@@ -63,9 +79,22 @@ async function fetchChampionsFromDDragon(
 /**
  * Get all champions, cached for 24h. Always reflects latest patch.
  */
+// Fallback version used when DDragon version endpoint is unreachable.
+const DDRAGON_FALLBACK_VERSION = '15.10.1';
+
 export async function getAllChampions(): Promise<ChampionsResponse> {
   // We use a single key per version. We discover the version, then look up by version.
-  const version = await fetchLatestVersion();
+  let version: string;
+  try {
+    version = await fetchLatestVersion();
+  } catch (err) {
+    logger.error('ddragon version fetch failed; using fallback version', {
+      fallback: DDRAGON_FALLBACK_VERSION,
+      err: (err as Error).message,
+    });
+    version = DDRAGON_FALLBACK_VERSION;
+  }
+
   const key = KEYS.champions(version);
 
   const cached = await cacheGet<ChampionListItem[]>(key);
