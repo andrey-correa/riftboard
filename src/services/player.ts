@@ -57,6 +57,16 @@ type CachedSummonerProfile = {
   summonerLevel: number;
 };
 
+type CachedLeagueEntry = {
+  queueType: string;
+  tier: string;
+  rank: string;
+  leaguePoints: number;
+  wins: number;
+  losses: number;
+  hotStreak?: boolean;
+};
+
 function buildRanks(
   entries: Array<{
     queueType: string;
@@ -195,16 +205,6 @@ async function fetchAndPersistProfile(
   const summonerLevel = summoner.summonerLevel;
 
   // Fetch league entries (rank data) — cache-first, 10 min TTL
-  type CachedLeagueEntry = {
-    queueType: string;
-    tier: string;
-    rank: string;
-    leaguePoints: number;
-    wins: number;
-    losses: number;
-    hotStreak?: boolean;
-  };
-
   const leagueKey = KEYS.leagueEntries(region, summonerId);
   let leagueEntries = await cacheGet<CachedLeagueEntry[]>(leagueKey);
 
@@ -251,7 +251,7 @@ async function fetchAndPersistProfile(
         gameName: account.gameName,
         tagLine: account.tagLine,
         region,
-        summonerId,   // now always populated
+        summonerId, // now always populated
         profileIcon: profileIconId,
         level: summonerLevel,
         lastUpdated: now,
@@ -519,15 +519,22 @@ export async function refreshPlayer(
   gameName: string,
   tagLine: string,
 ): Promise<{ profile: PlayerProfile; matches: MatchSummary[] }> {
+  // Pre-invalidate league entries cache so fetchAndPersistProfile fetches fresh
+  // rank data on this same request (not just on the next one).
+  const stale = await cacheGet<PlayerProfile>(
+    KEYS.playerProfile(region, gameName, tagLine),
+  );
+  if (stale?.summonerId) {
+    await cacheDel(KEYS.leagueEntries(region, stale.summonerId));
+  }
+
   const profile = await loadPlayerProfile(region, gameName, tagLine, {
     forceFresh: true,
   });
 
+  // Clean up remaining caches after the fresh load.
   await Promise.all([
     cacheDel(KEYS.summoner(region, profile.puuid)),
-    profile.summonerId
-      ? cacheDel(KEYS.leagueEntries(region, profile.summonerId))
-      : Promise.resolve(),
     cacheDel(KEYS.matchIds(profile.regionalRoute, profile.puuid)),
   ]);
 

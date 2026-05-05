@@ -187,7 +187,6 @@ export function RankCard({ rank, queueType }: RankCardProps) {
   const tierClass = tierColorClass(rank.tier);
   const total = rank.wins + rank.losses;
   const isApex = APEX_TIERS.has(rank.tier);
-  const wrPct = total > 0 ? (rank.wins / total) * 100 : 0;
 
   return (
     <div className="card p-5">
@@ -239,7 +238,7 @@ export function RankCard({ rank, queueType }: RankCardProps) {
           <div className="mt-2 h-1.5 w-full rounded-full bg-bg-elevated overflow-hidden">
             <div
               className={`h-full rounded-full transition-all ${rank.winRate >= 55 ? 'bg-win' : rank.winRate >= 50 ? 'bg-accent' : 'bg-loss'}`}
-              style={{ width: `${Math.min(wrPct, 100)}%` }}
+              style={{ width: `${Math.min(rank.winRate, 100)}%` }}
             />
           </div>
         </div>
