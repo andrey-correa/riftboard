@@ -34,7 +34,7 @@ export interface AnalyticsContext {
 
 export async function resolveLatestPatch(
   region: string,
-  role: string,
+  role: string | undefined,
   queueId: number,
   championId?: number,
 ): Promise<string | null> {
@@ -45,12 +45,18 @@ export async function resolveLatestPatch(
     ? Prisma.sql`AND "championId" = ${championId}`
     : Prisma.sql``;
 
+  // Only filter by role when explicitly provided — omitting it lets us find
+  // the latest patch regardless of role (used when role is not yet known).
+  const roleFilter = role
+    ? Prisma.sql`AND role = ${role}`
+    : Prisma.sql``;
+
   const rows = await prisma.$queryRaw<{ patch: string }[]>`
     SELECT patch
     FROM "ChampionAggregate"
     WHERE region    = ${region}
-      AND role      = ${role}
       AND "queueId" = ${queueId}
+      ${roleFilter}
       ${championFilter}
     GROUP BY patch
     ORDER BY

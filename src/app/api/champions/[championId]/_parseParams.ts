@@ -54,10 +54,12 @@ export async function parseChampionParams(
     return { error: `Invalid role: ${role}. Valid: ${[...VALID_ROLES].join(', ')}.`, status: 400 };
   }
 
-  // patch — resolve latest if not provided
+  // patch — resolve latest if not provided.
+  // When role is not yet known, resolve patch across all roles so champions
+  // that don't play MIDDLE (or any single hardcoded role) are not 404'd.
   let patch = sp.get('patch') ?? '';
   if (!patch) {
-    const resolved = await resolveLatestPatch(region, role || 'MIDDLE', queueId, championId);
+    const resolved = await resolveLatestPatch(region, role || undefined, queueId, championId);
     if (!resolved) {
       return { error: 'No data available for this champion yet.', status: 404 };
     }
