@@ -279,8 +279,11 @@ export async function getMatchIdsByPuuid(
   puuid: string,
   start = 0,
   count = 20,
+  queue?: number,
 ): Promise<string[]> {
-  const endpoint = `/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${start}&count=${count}`;
+  let qs = `start=${start}&count=${count}`;
+  if (queue != null) qs += `&queue=${queue}`;
+  const endpoint = `/lol/match/v5/matches/by-puuid/${puuid}/ids?${qs}`;
   const url = `${regionalHost(route)}${endpoint}`;
   return riotRequest<string[]>({ endpoint, url });
 }

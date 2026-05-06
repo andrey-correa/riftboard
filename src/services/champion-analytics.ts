@@ -7,6 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { cacheGet, cacheSet, KEYS, TTL } from '@/lib/redis';
 import { MIN_SAMPLES } from '@/services/champion-aggregates';
 import type {
@@ -37,9 +38,12 @@ export async function resolveLatestPatch(
   queueId: number,
   championId?: number,
 ): Promise<string | null> {
-  const where = championId
-    ? { championId, region, role, queueId }
-    : { region, role, queueId };
+  // Prisma.sql is required for conditional SQL fragments —
+  // prisma.$queryRaw returns a PrismaPromise, not a Sql fragment,
+  // and embedding it inside another $queryRaw produces a syntax error.
+  const championFilter = championId != null
+    ? Prisma.sql`AND "championId" = ${championId}`
+    : Prisma.sql``;
 
   const rows = await prisma.$queryRaw<{ patch: string }[]>`
     SELECT patch
@@ -47,7 +51,7 @@ export async function resolveLatestPatch(
     WHERE region    = ${region}
       AND role      = ${role}
       AND "queueId" = ${queueId}
-      ${championId != null ? prisma.$queryRaw`AND "championId" = ${championId}` : prisma.$queryRaw``}
+      ${championFilter}
     GROUP BY patch
     ORDER BY
       CAST(SPLIT_PART(patch, '.', 1) AS INTEGER) DESC,

@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "seed:analytics": "node --input-type=module -e \"import('node:http').then(({request})=>{const b=JSON.stringify({region:'BR1',tier:'challenger',playerLimit:10,matchesPerPlayer:10});const r=request({hostname:'localhost',port:3000,path:'/api/admin/champions/ingest',method:'POST',headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(b)}},res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>console.log(JSON.parse(d)))});r.write(b);r.end()})\""
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

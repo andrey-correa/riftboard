@@ -83,7 +83,9 @@ export async function persistMatchParticipants(
       damageToChampions: p.totalDamageDealtToChampions,
       damageTaken: p.totalDamageTaken,
       visionScore: p.visionScore,
-      role: p.role ?? null,
+      // teamPosition is the reliable in-game position: TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY.
+      // p.role is a deprecated Riot field ("CARRY", "SUPPORT") and must not be used.
+      role: p.teamPosition ?? p.individualPosition ?? null,
       lane: p.lane ?? null,
       queueId: info.queueId,
       gameMode: info.gameMode,
